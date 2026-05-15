@@ -8,6 +8,7 @@ import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.World;
 import org.bukkit.block.BlockFace;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
@@ -63,6 +64,8 @@ public class PlayerListener implements Listener {
     private BossBar bossBar;
     private long roundStartTime;
     private String materialPath;
+    /** World the game is being played in — captured at game start for the RGA conclude command. */
+    private World gameWorld;
     /** Current round duration in ticks — starts at ROUND_TICKS_START, shrinks when all succeed. */
     private int currentRoundTicks = ROUND_TICKS_START;
     /** True while the 5-second countdown is running (blocks movement detection). */
@@ -86,6 +89,10 @@ public class PlayerListener implements Listener {
             UUID uuid = player.getUniqueId();
             this.usersInGame.add(uuid);
             this.scores.put(uuid, 0);
+            // Capture the world from the first player we see
+            if (this.gameWorld == null) {
+                this.gameWorld = player.getWorld();
+            }
         }
 
         this.bossBar = createBossBar();
@@ -106,6 +113,7 @@ public class PlayerListener implements Listener {
         cancelTask(bossBarTaskId);
         roundEndTaskId = -1;
         bossBarTaskId  = -1;
+        this.gameWorld = null;
     }
 
     public void setMaterialPath(String materialPath) {
@@ -274,6 +282,7 @@ public class PlayerListener implements Listener {
             Player winner = Bukkit.getPlayer(leaders.get(0));
             String name = winner != null ? winner.getName() : "Unknown";
             broadcast(buildMessage("🏆 " + name + " wins with " + maxScore + " point(s)! 🏆", NamedTextColor.GOLD));
+            concludeRGA();
             resetGame();
             return true;
         }
@@ -364,6 +373,7 @@ public class PlayerListener implements Listener {
         this.scores.remove(uuid);
 
         if (this.usersInGame.isEmpty()) {
+            concludeRGA();
             resetGame();
             return;
         }
@@ -402,6 +412,16 @@ public class PlayerListener implements Listener {
 
     private void broadcast(Component message) {
         Bukkit.broadcast(message);
+    }
+
+    /**
+     * Dispatches the RGA conclude command so Ronlab Game Assistant knows the
+     * minigame has ended. RGA handles stripping _the_nether / _the_end suffixes
+     * itself, so we can pass any dimension world name directly.
+     */
+    private void concludeRGA() {
+        if (this.gameWorld == null) return;
+        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "rga conclude " + this.gameWorld.getName());
     }
 
     private void cancelTask(int taskId) {
