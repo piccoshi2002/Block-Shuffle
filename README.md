@@ -31,6 +31,8 @@ Edit `plugins/BlockShuffle/settings.yml` after first run to customise material l
 
 ## Changelog
 
+### V0.2.2
+
 ### v0.2.1
 
 - Fixed bug that prevented sound effects for players finding their block and failing to find their block.
@@ -38,7 +40,6 @@ Edit `plugins/BlockShuffle/settings.yml` after first run to customise material l
 
 ### v0.2
 
-- Added various GUI elememts.
 - Added player's currently tasked block above the hotbar.
 - Added indicator above hotbar when a player's block is found.
 - Added scoreboard that tracks current players, how many points they have, how many blocks they have found, and whether or not they have found their current block.
