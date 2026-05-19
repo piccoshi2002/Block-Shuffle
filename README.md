@@ -72,3 +72,5 @@ Edit `plugins/BlockShuffle/settings.yml` after first run to customise material l
 ## Original Plugin
 
 https://github.com/OliverB21/BlockShuffle
+
+This plugin was initially made by Dream, and updated to Minecraft version 1.18 by.
