@@ -1,13 +1,14 @@
 package tech.reisu1337.blockshuffle.events;
 
 import com.google.common.collect.Sets;
+import net.kyori.adventure.key.Key;
+import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.BlockFace;
 import org.bukkit.boss.BarColor;
@@ -23,6 +24,7 @@ import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
 import org.bukkit.scoreboard.RenderType;
 import org.bukkit.scoreboard.Scoreboard;
+import io.papermc.paper.scoreboard.numbers.NumberFormat;
 import tech.reisu1337.blockshuffle.BlockShuffle;
 
 import java.time.Duration;
@@ -46,6 +48,13 @@ public class PlayerListener implements Listener {
     private static final int ROUND_TICKS_MIN    = 1200; // 1 minute floor
     private static final int ROUND_TICKS_SHRINK = 1200; // shrink by 1 minute when all succeed
     private static final int COUNTDOWN_SECS     = 5;
+
+    // Adventure sounds (registry-safe for Paper 26.1.2)
+    private static final Sound SND_BLOCK_FOUND  = Sound.sound(Key.key("minecraft:block.beacon.activate"),  Sound.Source.MASTER, 1f, 1f);
+    private static final Sound SND_BLOCK_FAILED = Sound.sound(Key.key("minecraft:entity.villager.no"),      Sound.Source.MASTER, 1f, 1f);
+    private static final Sound SND_POINT_EARNED = Sound.sound(Key.key("minecraft:entity.player.attack.sweep"), Sound.Source.MASTER, 1f, 1f);
+    private static final Sound SND_COUNTDOWN    = Sound.sound(Key.key("minecraft:block.note_block.hat"),    Sound.Source.MASTER, 1f, 1f);
+    private static final Sound SND_GO           = Sound.sound(Key.key("minecraft:block.note_block.hat"),    Sound.Source.MASTER, 1f, 2f);
 
     // ── Per-round state ──────────────────────────────────────────────────────
     /** Players still in the game this round and their assigned block. */
@@ -161,7 +170,7 @@ public class PlayerListener implements Listener {
                         Component.empty(),
                         Title.Times.times(Duration.ZERO, Duration.ofMillis(1100), Duration.ZERO)
                     ));
-                    p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, 1f, 1f);
+                    p.playSound(SND_COUNTDOWN);
                 }
             }, delay);
         }
@@ -176,7 +185,7 @@ public class PlayerListener implements Listener {
                     Component.empty(),
                     Title.Times.times(Duration.ZERO, Duration.ofMillis(800), Duration.ofMillis(200))
                 ));
-                p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, 1f, 2f);
+                p.playSound(SND_GO);
             }
             nextRound();
         }, (long) COUNTDOWN_SECS * 20L);
@@ -233,7 +242,7 @@ public class PlayerListener implements Listener {
                 // Everyone failed — play fail sound for all
                 for (UUID uuid : this.usersInGame) {
                     Player p = Bukkit.getPlayer(uuid);
-                    if (p != null) p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+                    if (p != null) p.playSound(SND_BLOCK_FAILED);
                 }
                 broadcast(buildMessage("Nobody found their block — no points awarded!", NamedTextColor.YELLOW));
             } else {
@@ -257,7 +266,7 @@ public class PlayerListener implements Listener {
                 this.scores.merge(uuid, 1, Integer::sum);
                 Player p = Bukkit.getPlayer(uuid);
                 if (p != null) {
-                    p.playSound(p.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1f, 1f);
+                    p.playSound(SND_POINT_EARNED);
                     p.sendMessage(buildMessage("+1 point! (" + this.scores.get(uuid) + "/" + POINTS_TO_WIN + ")", NamedTextColor.GREEN));
                 }
             }
@@ -266,7 +275,7 @@ public class PlayerListener implements Listener {
                 if (!this.completedUsers.contains(uuid)) {
                     Player p = Bukkit.getPlayer(uuid);
                     if (p != null) {
-                        p.playSound(p.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+                        p.playSound(SND_BLOCK_FAILED);
                         failedNames.add(p.getName());
                     }
                 }
@@ -318,6 +327,7 @@ public class PlayerListener implements Listener {
         Objective obj = board.registerNewObjective(
                 "blockshuffle", "dummy",
                 Component.text("◆ BlockShuffle ◆", NamedTextColor.GOLD, TextDecoration.BOLD));
+        obj.setNumberFormat(NumberFormat.blank());
         obj.setDisplaySlot(DisplaySlot.SIDEBAR);
 
         for (UUID uuid : this.usersInGame) {
@@ -456,7 +466,7 @@ public class PlayerListener implements Listener {
             this.completedUsers.add(uuid);
             this.blocksFound.merge(uuid, 1, Integer::sum);
 
-            player.playSound(player.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 1f, 1f);
+            player.playSound(SND_BLOCK_FOUND);
             broadcast(buildMessage(player.getName() + " found their block!", NamedTextColor.GREEN));
             updateSidebar();
 
