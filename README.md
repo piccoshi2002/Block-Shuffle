@@ -31,13 +31,16 @@ Edit `plugins/BlockShuffle/settings.yml` after first run to customise material l
 
 ## Changelog
 
-### v0.5
-
-### v0.4
-
 ### v0.3
 
+
+
 ### v0.2
+
+- Added various GUI elememts.
+- Added player's currently tasked block above the hotbar.
+- Added indicator above hotbar when a player's block is found.
+- Added scoreboard that tracks current players, how many points they have, how many blocks they have found, and whether or not they have found their current block.
 
 ### v0.1
 
