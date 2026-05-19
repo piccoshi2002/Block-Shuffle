@@ -23,9 +23,8 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
 import org.bukkit.scoreboard.RenderType;
-import org.bukkit.scoreboard.Score;
 import org.bukkit.scoreboard.Scoreboard;
-import io.papermc.paper.scoreboard.numbers.NumberFormat;
+import org.bukkit.scoreboard.Team;
 import tech.reisu1337.blockshuffle.BlockShuffle;
 
 import java.time.Duration;
@@ -341,13 +340,9 @@ public class PlayerListener implements Listener {
      * Rebuilds the sidebar lines to reflect current scores, blocks found, and
      * the found/searching indicator for this round.
      *
-     * Sidebar layout (top → bottom via descending score values):
-     *   [blank]
-     *   ✔ PlayerA  (found this round)
-     *    pts:2  found:5
-     *   ⧖ PlayerB  (still searching)
-     *    pts:1  found:3
-     *   [blank]
+     * Uses the Team-prefix trick to hide score numbers: each line is a Team
+     * whose prefix holds the visible text; the actual scoreboard entry is an
+     * invisible unique color-code string. This works on all Paper builds.
      */
     private void updateSidebar() {
         if (this.scoreboard == null) return;
@@ -355,10 +350,9 @@ public class PlayerListener implements Listener {
         Objective obj = this.scoreboard.getObjective("blockshuffle");
         if (obj == null) return;
 
-        // Clear existing entries
-        for (String entry : this.scoreboard.getEntries()) {
-            this.scoreboard.resetScores(entry);
-        }
+        // Remove all existing teams and reset all entries
+        for (Team t : this.scoreboard.getTeams()) t.unregister();
+        for (String entry : this.scoreboard.getEntries()) this.scoreboard.resetScores(entry);
 
         // Sort players by score descending, then name for stability
         List<UUID> sorted = this.usersInGame.stream()
@@ -371,40 +365,64 @@ public class PlayerListener implements Listener {
                         }))
                 .collect(Collectors.toList());
 
-        // Each player occupies 2 lines; add blank padding at top and bottom.
-        // Scoreboard lines use unique strings as keys; score value = display order.
-        int lineCount = sorted.size() * 2 + 2; // 2 lines/player + top + bottom blank
-        int lineIndex = lineCount; // highest value = top of sidebar
+        // Each player = 2 lines; plus top + bottom blank = sorted.size()*2 + 2 lines total
+        int lineIndex = sorted.size() * 2 + 2;
 
-        // Top blank
-        Score topBlank = obj.getScore(" ");
-        topBlank.setScore(lineIndex--);
-        topBlank.setNumberFormat(NumberFormat.blank());
+        // Helper: create a team whose prefix IS the visible text, entry is a
+        // unique invisible string (stack of §r codes unique per slot index).
+        // The score number is never shown because the entry itself is blank-looking.
+        addLine(obj, "bs_top", buildInvisibleEntry(lineIndex), Component.empty(), lineIndex--);
 
         for (UUID uuid : sorted) {
             Player p = Bukkit.getPlayer(uuid);
             String name = p != null ? p.getName() : "Unknown";
-            int pts = this.scores.getOrDefault(uuid, 0);
-            int found = this.blocksFound.getOrDefault(uuid, 0);
+            int pts    = this.scores.getOrDefault(uuid, 0);
+            int found  = this.blocksFound.getOrDefault(uuid, 0);
             boolean foundThisRound = this.completedUsers.contains(uuid);
             boolean stillSearching = this.userMaterialMap.containsKey(uuid);
 
-            String indicator = foundThisRound ? "§a✔ " : (stillSearching ? "§e⧖ " : "§7✘ ");
-            String nameLine  = indicator + "§f" + name;
-            String statsLine = "§7  pts:§b" + pts + " §7found:§d" + found;
+            Component indicator = foundThisRound
+                    ? Component.text("✔ ", NamedTextColor.GREEN)
+                    : (stillSearching
+                            ? Component.text("⧖ ", NamedTextColor.YELLOW)
+                            : Component.text("✘ ", NamedTextColor.GRAY));
 
-            Score nameScore  = obj.getScore(nameLine);
-            Score statsScore = obj.getScore(statsLine);
-            nameScore.setScore(lineIndex--);
-            nameScore.setNumberFormat(NumberFormat.blank());
-            statsScore.setScore(lineIndex--);
-            statsScore.setNumberFormat(NumberFormat.blank());
+            Component nameLine = indicator.append(Component.text(name, NamedTextColor.WHITE));
+            Component statsLine = Component.text("  pts:", NamedTextColor.GRAY)
+                    .append(Component.text(pts, NamedTextColor.AQUA))
+                    .append(Component.text(" found:", NamedTextColor.GRAY))
+                    .append(Component.text(found, NamedTextColor.LIGHT_PURPLE));
+
+            addLine(obj, "bs_name_" + uuid.toString().replace("-","").substring(0,8),
+                    buildInvisibleEntry(lineIndex), nameLine,  lineIndex--);
+            addLine(obj, "bs_stat_" + uuid.toString().replace("-","").substring(0,8),
+                    buildInvisibleEntry(lineIndex), statsLine, lineIndex--);
         }
 
-        // Bottom blank (must be different from top blank)
-        Score bottomBlank = obj.getScore("  ");
-        bottomBlank.setScore(lineIndex);
-        bottomBlank.setNumberFormat(NumberFormat.blank());
+        addLine(obj, "bs_bot", buildInvisibleEntry(lineIndex), Component.empty(), lineIndex);
+    }
+
+    /**
+     * Registers a team, sets its prefix to the display component, adds a unique
+     * invisible entry to it, and assigns that entry a score on the objective.
+     */
+    private void addLine(Objective obj, String teamName, String entry, Component prefix, int score) {
+        Team team = this.scoreboard.registerNewTeam(teamName);
+        team.prefix(prefix);
+        team.addEntry(entry);
+        obj.getScore(entry).setScore(score);
+    }
+
+    /**
+     * Builds a unique invisible entry string for a given line index using
+     * stacked §r reset codes. These are visually empty but each unique,
+     * satisfying the scoreboard's requirement that entries be distinct.
+     */
+    private String buildInvisibleEntry(int index) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < index; i++) sb.append("§r");
+        return sb.toString();
+    }
     }
 
     // ── Action bar ────────────────────────────────────────────────────────────
