@@ -54,8 +54,8 @@ Edit `plugins/BlockShuffle/settings.yml` after first run to customise material l
 
 ### v0.1
 
-- Added the blockshuffle plugin.
-- Changed
+- Added the recreated blockshuffle plugin.
+- Changed when the timer decreases.
 
 ## Changes from original (1.18 → 26.1.2)
 
