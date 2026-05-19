@@ -423,7 +423,6 @@ public class PlayerListener implements Listener {
         for (int i = 0; i < index; i++) sb.append("§r");
         return sb.toString();
     }
-    }
 
     // ── Action bar ────────────────────────────────────────────────────────────
 
