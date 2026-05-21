@@ -1,16 +1,12 @@
 # BlockShuffle
 
-A Block Shuffle mini-game plugin for Minecraft Paper servers.
+A Block Shuffle mini-game plugin for Minecraft Paper servers. Each round, all players are assigned a block to find and stand on.
 
 ## Requirements
 
 - Paper `26.1.2` (Minecraft 1.21.x)
 - Java 21+
-
-## Installation
-
-Drop the jar into your server's `plugins/` folder and restart.
-
+- 
 ## Usage
 
 Run `/blockshuffle` (requires `blockshuffle.admin` permission, default: op) to open the game menu.
@@ -31,7 +27,13 @@ Edit `plugins/BlockShuffle/settings.yml` after first run to customise material l
 
 ## Changelog
 
-### V0.2.2
+### v0.2.3
+
+- Added announcement titles for the winner when a game ends naturally.
+- Changed sound that plays when a player gains a point.
+- Changed when the RGA conclusion command runs after a game finishes naturally.
+
+### v0.2.2
 
 - Changed sound that plays when player fails to find their block.
 - Fixed formatting issue that showed red placeholder numbers on each row of the scoreboard.
