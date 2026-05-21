@@ -6,7 +6,7 @@ A Block Shuffle mini-game plugin for Minecraft Paper servers. Each round, all pl
 
 - Paper `26.1.2` (Minecraft 1.21.x)
 - Java 21+
-- 
+
 ## Usage
 
 Run `/blockshuffle` (requires `blockshuffle.admin` permission, default: op) to open the game menu.
