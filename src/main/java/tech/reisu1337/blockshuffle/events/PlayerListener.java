@@ -47,7 +47,9 @@ public class PlayerListener implements Listener {
     private static final int POINTS_TO_WIN      = 3;
     private static final int ROUND_TICKS_START  = 6000; // 5 minutes
     private static final int ROUND_TICKS_MIN    = 1200; // 1 minute floor
+    private static final int ROUND_TICKS_MAX    = 6000; // 5 minute ceiling
     private static final int ROUND_TICKS_SHRINK = 1200; // shrink by 1 minute when all succeed
+    private static final int ROUND_TICKS_GROW   = 1200; // grow by 1 minute when nobody succeeds
     private static final int COUNTDOWN_SECS     = 5;
 
     // Sound keys — using String + SoundCategory which works on all Paper 26.x builds
@@ -66,8 +68,6 @@ public class PlayerListener implements Listener {
     private final Set<UUID> usersInGame = Sets.newConcurrentHashSet();
     /** Accumulated points per player across all rounds. */
     private final Map<UUID, Integer> scores = new ConcurrentHashMap<>();
-    /** Total blocks found per player across all rounds. */
-    private final Map<UUID, Integer> blocksFound = new ConcurrentHashMap<>();
 
     // ── Misc state ───────────────────────────────────────────────────────────
     private final Random random = new Random();
@@ -84,8 +84,10 @@ public class PlayerListener implements Listener {
     private String materialPath;
     /** World the game is being played in — captured at game start for the RGA conclude command. */
     private World gameWorld;
-    /** Current round duration in ticks — starts at ROUND_TICKS_START, shrinks when all succeed. */
+    /** Current round duration in ticks — adjusts based on round outcome. */
     private int currentRoundTicks = ROUND_TICKS_START;
+    /** Current round number, shown on the sidebar. */
+    private int currentRound = 0;
     /** True while the 5-second countdown is running (blocks movement detection). */
     private boolean countdownActive = false;
 
@@ -107,7 +109,6 @@ public class PlayerListener implements Listener {
             UUID uuid = player.getUniqueId();
             this.usersInGame.add(uuid);
             this.scores.put(uuid, 0);
-            this.blocksFound.put(uuid, 0);
             if (this.gameWorld == null) {
                 this.gameWorld = player.getWorld();
             }
@@ -131,9 +132,9 @@ public class PlayerListener implements Listener {
         this.usersInGame.clear();
         this.completedUsers.clear();
         this.scores.clear();
-        this.blocksFound.clear();
         this.countdownActive = false;
         this.currentRoundTicks = ROUND_TICKS_START;
+        this.currentRound = 0;
         this.plugin.setInProgress(false);
 
         if (this.bossBar != null) this.bossBar.removeAll();
@@ -209,6 +210,7 @@ public class PlayerListener implements Listener {
         this.userMaterialMap.clear();
         this.bossBar.setVisible(true);
         this.roundStartTime = System.currentTimeMillis();
+        this.currentRound++;
 
         for (UUID uuid : this.usersInGame) {
             Player player = Bukkit.getPlayer(uuid);
@@ -246,12 +248,23 @@ public class PlayerListener implements Listener {
 
         if (successCount == 0 || failCount == 0) {
             if (successCount == 0) {
-                // Everyone failed — play fail sound for all
+                // Everyone failed — grow the timer, play fail sound for all
                 for (UUID uuid : this.usersInGame) {
                     Player p = Bukkit.getPlayer(uuid);
                     if (p != null) p.playSound(p.getLocation(), SND_BLOCK_FAILED, SoundCategory.MASTER, 1f, 1f);
                 }
-                broadcast(buildMessage("Nobody found their block — no points awarded!", NamedTextColor.YELLOW));
+                int newTicks = Math.min(ROUND_TICKS_MAX, this.currentRoundTicks + ROUND_TICKS_GROW);
+                if (newTicks > this.currentRoundTicks) {
+                    this.currentRoundTicks = newTicks;
+                    broadcast(buildMessage(
+                        "Nobody found their block — no points awarded! Timer increased to "
+                        + (this.currentRoundTicks / 1200) + " minute(s)!",
+                        NamedTextColor.YELLOW));
+                } else {
+                    broadcast(buildMessage(
+                        "Nobody found their block — no points awarded! (Timer already at maximum: 5 minutes)",
+                        NamedTextColor.YELLOW));
+                }
             } else {
                 // Everyone succeeded — shrink the timer
                 int newTicks = Math.max(ROUND_TICKS_MIN, this.currentRoundTicks - ROUND_TICKS_SHRINK);
@@ -371,7 +384,6 @@ public class PlayerListener implements Listener {
         Objective obj = this.scoreboard.getObjective("blockshuffle");
         if (obj == null) return;
 
-        // Unregister leftover teams and clear all entries
         for (Team t : this.scoreboard.getTeams()) t.unregister();
         for (String entry : this.scoreboard.getEntries()) this.scoreboard.resetScores(entry);
 
@@ -385,24 +397,26 @@ public class PlayerListener implements Listener {
                         }))
                 .collect(Collectors.toList());
 
-        int lineIndex = sorted.size() * 2 + 2;
+        // Lines: blank + round + blank + (name + pts) per player + blank
+        int lineIndex = sorted.size() * 2 + 3;
 
         addLine(obj, "", lineIndex--);
+        addLine(obj, "§eRound §f" + this.currentRound, lineIndex--);
+        addLine(obj, " ", lineIndex--);
 
         for (UUID uuid : sorted) {
             Player p = Bukkit.getPlayer(uuid);
             String name = p != null ? p.getName() : "Unknown";
-            int pts    = this.scores.getOrDefault(uuid, 0);
-            int found  = this.blocksFound.getOrDefault(uuid, 0);
+            int pts = this.scores.getOrDefault(uuid, 0);
             boolean foundThisRound = this.completedUsers.contains(uuid);
             boolean stillSearching = this.userMaterialMap.containsKey(uuid);
 
             String indicator = foundThisRound ? "§a✔ " : (stillSearching ? "§e⧖ " : "§7✘ ");
             addLine(obj, indicator + "§f" + name, lineIndex--);
-            addLine(obj, " §7pts:§b" + pts + " §7found:§d" + found, lineIndex--);
+            addLine(obj, " §7pts:§b" + pts + "§7/§b" + POINTS_TO_WIN, lineIndex--);
         }
 
-        addLine(obj, " ", lineIndex);
+        addLine(obj, "  ", lineIndex);
     }
 
     /**
@@ -491,7 +505,6 @@ public class PlayerListener implements Listener {
         if (this.userMaterialMap.get(uuid) == materialBelow) {
             this.userMaterialMap.remove(uuid);
             this.completedUsers.add(uuid);
-            this.blocksFound.merge(uuid, 1, Integer::sum);
 
             player.playSound(player.getLocation(), SND_BLOCK_FOUND, SoundCategory.MASTER, 1f, 1f);
             broadcast(buildMessage(player.getName() + " found their block!", NamedTextColor.GREEN));
@@ -513,7 +526,6 @@ public class PlayerListener implements Listener {
         this.userMaterialMap.remove(uuid);
         this.completedUsers.remove(uuid);
         this.scores.remove(uuid);
-        this.blocksFound.remove(uuid);
 
         if (this.usersInGame.isEmpty()) {
             concludeRGA();
